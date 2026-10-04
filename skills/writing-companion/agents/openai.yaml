@@ -1,0 +1,4 @@
+interface:
+  display_name: "写作伴侣"
+  short_description: "以散文随笔为主的长期写作协作：质疑、构思、作品整理与教学"
+  default_prompt: "使用 $writing-companion，依据当前任务和已有资料开展写作协作。"

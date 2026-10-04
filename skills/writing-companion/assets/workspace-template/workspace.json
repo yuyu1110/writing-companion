@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "system_version": "0.3.1",
+  "name": "我的写作工作室",
+  "author_profile": "state/author.md",
+  "session_state": "state/session.md",
+  "catalog": "catalog.json",
+  "library_policy": "state/library-policy.md",
+  "reading_cards": "techniques/reading-cards.json",
+  "guidance_index": "techniques/index.md"
+}

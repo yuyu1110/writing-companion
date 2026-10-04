@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "guide_source_ids": [],
+  "concepts": {
+    "memory": {
+      "label": "回忆与时间跳转",
+      "terms": [
+        "回想",
+        "记得",
+        "往事",
+        "多年以后",
+        "remember",
+        "recalled"
+      ]
+    },
+    "misrecognition": {
+      "label": "误认与理解偏差",
+      "terms": [
+        "误会",
+        "误解",
+        "以为",
+        "认错",
+        "mistaken",
+        "misunderstood"
+      ]
+    },
+    "concealment": {
+      "label": "隐瞒、秘密与欺骗",
+      "terms": [
+        "隐瞒",
+        "秘密",
+        "撒谎",
+        "不敢告诉",
+        "secret",
+        "conceal",
+        "lied"
+      ]
+    },
+    "intimacy": {
+      "label": "亲密关系",
+      "terms": [
+        "妻子",
+        "丈夫",
+        "情人",
+        "恋人",
+        "爱情",
+        "wife",
+        "husband",
+        "lover"
+      ]
+    },
+    "family": {
+      "label": "家庭关系",
+      "terms": [
+        "父亲",
+        "母亲",
+        "儿子",
+        "女儿",
+        "father",
+        "mother",
+        "daughter",
+        "son"
+      ]
+    },
+    "alienation": {
+      "label": "疏离、隔绝与孤独",
+      "terms": [
+        "孤独",
+        "陌生",
+        "隔绝",
+        "疏远",
+        "alone",
+        "estranged",
+        "lonely"
+      ]
+    },
+    "choice": {
+      "label": "犹豫与选择",
+      "terms": [
+        "犹豫",
+        "决定",
+        "选择",
+        "后悔",
+        "decided",
+        "hesitated",
+        "regret"
+      ]
+    },
+    "chance": {
+      "label": "偶然与命运",
+      "terms": [
+        "偶然",
+        "命运",
+        "巧合",
+        "必然",
+        "chance",
+        "fate",
+        "coincidence"
+      ]
+    },
+    "social_judgment": {
+      "label": "社会评价与身份",
+      "terms": [
+        "名声",
+        "耻辱",
+        "体面",
+        "身份",
+        "reputation",
+        "shame",
+        "respectable"
+      ]
+    },
+    "bodily_feeling": {
+      "label": "感受的身体表现",
+      "terms": [
+        "颤抖",
+        "呼吸",
+        "胃痛",
+        "心跳",
+        "trembled",
+        "breathing",
+        "heartbeat"
+      ]
+    }
+  },
+  "limits": "These are editable lexical leads, not exhaustive semantic definitions. literature means admitted sources not identified as guides; it includes prose, poetry and other genres."
+}
