@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "package_files": [
+    "SKILL.md",
+    "agents/openai.yaml",
+    "references/dialogue.md",
+    "references/teaching.md",
+    "references/voice.md",
+    "references/retrieval.md",
+    "references/library.md",
+    "references/workspace.md",
+    "scripts/library_reader.py",
+    "scripts/search_library.py",
+    "scripts/work_manager.py",
+    "local-workspace.example.json",
+    "assets/workspace-template/workspace.json",
+    "assets/workspace-template/catalog.json",
+    "assets/workspace-template/techniques/retrieval-config.json",
+    "assets/workspace-template/techniques/reading-cards.json",
+    "assets/workspace-template/techniques/index.md",
+    "assets/workspace-template/state/author.md",
+    "assets/workspace-template/state/session.md",
+    "assets/workspace-template/state/library-policy.md",
+    "assets/workspace-template/library/.gitkeep",
+    "assets/record-templates/work-record.md",
+    "assets/record-templates/material-card.md",
+    "assets/record-templates/novel-state.md",
+    "assets/record-templates/voice-decisions.md",
+    "assets/record-templates/feedback-record.md",
+    "assets/record-templates/handoff.md",
+    "assets/gpt/usage.md",
+    "assets/gpt/environment.md",
+    "assets/gpt/markdown-templates.md",
+    "assets/gpt/examples.md",
+    "maintenance/export-manifest.json"
+  ],
+  "gpt_shared_rules": [
+    "references/dialogue.md",
+    "references/teaching.md",
+    "references/voice.md",
+    "references/retrieval.md",
+    "references/library.md",
+    "references/workspace.md"
+  ],
+  "gpt_record_templates": [
+    "assets/record-templates/work-record.md",
+    "assets/record-templates/material-card.md",
+    "assets/record-templates/novel-state.md",
+    "assets/record-templates/voice-decisions.md",
+    "assets/record-templates/feedback-record.md",
+    "assets/record-templates/handoff.md"
+  ],
+  "gpt_version": "1.1",
+  "platform_guidance_verified": "2026-10-31",
+  "blank_text_sha256": {
+    "state/author.md": "3fd1608547945fc29a311da5522b0305a17b73309f11e0c57705351165c0f0ed",
+    "state/session.md": "416debad66b445e9ac72384e44ae36605cd242ab1cd77ab1014f67564eae0f1a",
+    "state/library-policy.md": "ed4c75df6cfe9021f590cfcb5d79a184813bf02f9657c84ff342457d1a9df1c4",
+    "techniques/index.md": "8e33e0dba5449dcc7e71e8a80e1b48a836d8cda9f123dbc6cdb722e4e06ee238"
+  }
+}

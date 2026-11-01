@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "system_version": "0.3.1",
+  "system_version": "0.4.0",
   "name": "我的写作工作室",
   "author_profile": "state/author.md",
   "session_state": "state/session.md",

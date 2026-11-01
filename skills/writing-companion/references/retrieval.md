@@ -2,18 +2,28 @@
 
 用于复用阅读卡、发现文学范例、比较写法和核实引用。来源导入、阅读卡保存和索引更新统一见 [资料与阅读卡管理](library.md)。
 
-默认用 [library_reader.py](../scripts/library_reader.py)，相对路径均从 Skill 目录开始；脚本用本机绑定定位工作区，也接受全局 `--workspace`。无需把 catalog、chunks.jsonl、SQLite 数据库或整本书输出到对话。
+<!-- export:gpt:local-tools:start -->
+默认用 [library_reader.py](../scripts/library_reader.py)，相对路径均从 Skill 目录开始；脚本依次使用全局 `--workspace`、当前目录的 `workspace.json`、Skill 内 `local-workspace.json` 的绑定。无需把 catalog、chunks.jsonl、SQLite 数据库或整本书输出到对话。
+<!-- export:gpt:local-tools:end -->
 
 ## 最短路径
 
 先区分“复用已有指导”与“发现文学例子”。前者可以直接查知识卡；后者（如“列举几个哭泣场景”“哪些小说有相似表达”）默认在整个适用书库发现候选，不能因卡片命中就停止，也不能因最近谈过某两本书就只查它们。所有已准入来源使用同一索引、排序与证据标准；不按网站、本地文件身份、导入先后或已读程度加权。按任务筛选资料类型是内容筛选，不是另设小书库。省上下文应限制返回量，不能擅自缩小发现范围。
 
-1. `notes "重复 节奏"`：查小卡目录；再 `notes --id repetition` 只读一张指导卡。卡片证据会检查文件摘要；`valid=false` 时回原文重读。一般指导可据有效卡片转述，不必每次重新读章。卡片是已核验分析，不是原句集合。
+<!-- export:gpt:reading-steps:start -->
+1. `notes "重复 节奏"`：查小卡目录；再 `notes --id repetition` 只读一张指导卡。`text_verified` 检查正文摘要，`metadata_status` 另标目录信息：`match` 表示与卡片已记录的指纹一致，`changed` 表示书名、版本或范围等已变，`not_recorded` 表示旧卡未记录该基线。`valid=false` 时回原文重读。旧卡可能因正文有效而保留 `valid=true`，但此时 `validation_scope=text_only`、`metadata_recheck_required=true`；不能称其版本信息已经核验。一般指导可据有效正文证据转述，引用或判断版本适用性时仍回查。卡片是分析，不是原句集合。
 2. 找新材料：`search "回想" --kind literature`，不预先指定来源。只有用户明确指定作品，或已通过本轮广泛检索选中候选后，才用 `--title` / `--source` 定位；已有阅读知识可补充候选，不能替代全库发现。默认最多4个短片段，每本最多2个，全文输出预算2400字符。搜索摘要不是可直接引用的完整上下文。
-3. 选中后 `read --passage "搜索返回的完整标识"`，验证源文件摘要并读取片段及前后文。也可 `read --source 来源ID --start 432 --end 450` 精确展开。默认预算3600字符。
+3. 选中后 `read --passage "搜索返回的完整标识"`，验证源文件摘要并读取片段及前后文。也可 `read --source 来源ID --start 432 --end 450` 精确展开。默认预算3600字符。返回的书名、作者、译者、版本说明与收录范围直接取当前 catalog，修改这些字段无需重建正文索引。`verified_current` 是兼容字段，和 `text_verified` 一样指正文核验；`metadata_origin=current_catalog` 只表明信息来自当前目录，不证明其出版事实已校勘。
 4. `output_truncated=true` 表示实际输出被缩短。原文续读用 `read --source 来源ID --offset 返回的next_offset`；提高 `--budget` 也可。不得将截断片段或中途停止的条件句当作完整意思。文件行可能很长，输出同时给行号、列号和字符偏移。
 
 这些预算是字符数，不是精确 token 计数。内容仍不够时按需扩大；不为省 token 截去决定含义的语境。不输出整个目录、大块 chunks.jsonl 或整份汇总笔记。跨对话通过 `reading_cards` 恢复可核验材料，不能假称记得上一对话全部原文。逐字引用、新的解释或涉及说话者判断时，读取原文及必要上下文；先看来源记录中的版本、coverage 和 edition_notes，不把部分文本称为全书或把缺失部分当作已读。
+<!-- export:gpt:reading-steps:end -->
+
+## 散文：把写作问题改写为原文可能出现的关系
+
+先用作者的句子与表达目的说明要找什么，再生成两组可落在原文中的线索。例如，含蓄写亲情可找“亲属称谓＋具体动作”；借景传情可找“场所或物件＋声音、光线或身体反应”；回忆旧居可找“旧物＋使用动作或今昔变化”；改变对一个人的看法可找“原先的评价＋一件改变认识的事”。同组用近义词、简繁异词和必要的英文词补足，再以两组组合发现候选。不要把整句自然语言问题当作一个必然出现在书中的短语，也不要把一个宽泛主题词的前几条命中当作全部范例。
+
+这些改写由助手按本次作品提出，是字词线索而非意义判断。先查整个适用书库，打开候选核实动作、说话者、前后转折和段落作用，再比较哪里可借鉴；没有合适结果时记录查过的组合并放宽其中一组。不要根据预想的范例倒填未读原文，也不把检索窗没有覆盖某句理解为书里没有。
 
 ## 小说：先表达要找的关系，再生成检索线索
 
@@ -26,19 +36,25 @@
 
 不要求每次填全，也不让作者重填已有文本能看出的信息。由这些关系提出候选，而不是宣称已经全库理解。
 
+<!-- export:gpt:card-command:start -->
 可以用 `notes "时间跳转 回忆" --kind fiction` 复用已核验场景卡。卡片标注的是局部，不据一张卡推断整部小说；范例发现范围仍遵循上述“最短路径”。
+<!-- export:gpt:card-command:end -->
 
+<!-- export:gpt:cross-language:start -->
 跨语言发现时，将中文及英文线索分别扩展检索，再合并候选、核验和挑选，避免只用中文词漏掉英文馆藏。要求“几个场景”时优先比较来自不同作品的有用候选，可先用 `--per-source 1`；多样性不替代相关性，不为凑书名保留无关结果。返回的 `scope` 记录本次是否限制了书名/来源及符合筛选条件的资料数；这个数不是已读数量，也不代表穷尽了所有相关场景。
+<!-- export:gpt:cross-language:end -->
 
 原文检索有三种互补方式：
 
+<!-- export:gpt:query-commands:start -->
 - **组合线索**：`search --group "父亲|母亲|father|mother" --group "隐瞒|秘密|secret" --kind literature`。组内任选，组间同时出现；匹配窗口不是完整场景，必要时读邻近片段，或逐组放宽防止漏掉跨段关系。
 - **扩展概念**：`search --concept intimacy --concept concealment --kind literature`。现有概念：memory、misrecognition、concealment、intimacy、family、alienation、choice、chance、social_judgment、bodily_feeling。这些仅是可扩展的词语线索；反讽、不可靠叙述等没有可靠标志词的写法，应依靠已读场景卡或提出作品候选后验证，不能靠搜到术语认定手法。
 - **已知候选**：已有阅读知识使某本小说值得检查时，先按标题找到真实版本，再用人物、地点、动作或标志物定位。对英文来源使用英文人名与动作词，不把没有中文命中当作没有相关内容。单个汉字不适合本索引，扩展成词组或用已知卡片。
 
-`--kind guide` 包含工作区 `techniques/retrieval-config.json` 的 `guide_source_ids` 登记的指导资料；`--kind literature` 是其余已准入资料，含小说、散文、诗歌等，不能当作已逐本核实的“小说分类”。不确定体裁时核对来源。
+`--kind guide` 包含已登记的写作指导 EPUB；`--kind literature` 是其余已准入资料，含小说、散文、诗歌等，不能当作已逐本核实的“小说分类”。不确定体裁时核对来源。
 
-全文候选按字词相关性排序、相邻片段去重并限制同书数量；候选池默认120条，可用 `--pool` 扩大。它不是向量语义搜索，不能保证找到所有意义相近的场景。仅在配置繁简映射字典时作字符级匹配归一，原文输出保持原字；未配置时繁简分开匹配，多义、异体与繁简词组仍可能漏检。搜索失败时记录实际范围，改用同义动作、人名、英文词或更宽条件，而不是虚构对应段落。
+全文候选按字词相关性排序、相邻片段去重并限制同书数量；候选池默认120条，可用 `--pool` 扩大。它不是向量语义搜索，不能保证找到所有意义相近的场景。简繁仅作字符级匹配归一，原文输出保持原字；多义、异体与繁简词组仍可能漏检。搜索失败时记录实际范围，改用同义动作、人名、英文词或更宽条件，而不是虚构对应段落。
+<!-- export:gpt:query-commands:end -->
 
 最终比较必须解释：哪里相似、哪里不同、可借鉴的具体处理及不宜照搬之处。故事行为发生在谁身上、说话者身份、否定与转折前后及反讽距离都要看上下文。人物台词不自动等于作者主张。作品候选、已读证据和确认的相似关系分开；相似不等于影响或抄袭。
 
@@ -50,8 +66,24 @@
 
 作者需要给自己的作品找引用时，检索与其具体意思有关的候选短引，解释原语境、吻合之处及可能的误用，再建议题记、正文引入、化用或仅作对读，说明衔接。是否采用由作者决定，不自行插入原稿。没有核实到合适出处就说明未找到，不硬凑引文或凭印象补齐名言。
 
+<!-- export:gpt:local-boundaries:start -->
 ## 检索工具与结果边界
+
+默认 `read` 仍按索引片段加前后各240字符展开。需要补足段落或章节时，可在看过候选并确认焦点后用 `read --passage 完整标识 --focus-offset 原文字符偏移 --context-mode paragraph`，或将模式改为 `section`。也可对已选中的来源用 `--source 来源ID --focus-offset 偏移`。`paragraph` 展开空行分隔的段落，`section` 从焦点前最近的 Markdown 标题展开至下一个同级或更高层标题；纯文本篇名不自动识别为章节，范围仍可能很长。
+
+搜索的 `match_offset` 是本窗口第一个匹配词在原文中的偏移，不保证就是所需动作或关系的中心；泛词可能在另一段。不要自动用它替代阅读判断。指定焦点时，过长上下文会在完整 JSON 字符预算内围绕该位置裁切；`context_complete=false`、`context_omitted_before/after` 与 `requested_offset_start/end` 如实标明未返回的语境，保留焦点不代表完整保留了否定或说话者信息。`offset_start/end` 是实际输出范围，源文件 SHA256 核验方式不变。接着读时用 `--offset next_offset`，只用默认 `chars` 模式且不带 `--focus-offset`，以免重复展开段落。需要前文时从更小偏移补读；不要把 `next_offset` 误解为已读完当前章节。
+
+`techniques/retrieval-config.json` 可省略；此时没有指导书分类与自定义概念，仍可字面检索。可选 `normalization_dictionary` 只能指向本工作区内的字典，首次建索引时读取并保存到派生索引中；脚本不再查找本机建设目录。更换字典需先备份、移除派生的 `library/retrieval.sqlite3` 后重建，`--force` 不替换已保存的映射。未配置字典的新索引只作 casefold，不能声称已统一简繁。
 
 搜索中的 `stale_sources` 表示结果已过期被排除；原文展开时摘要不匹配会拒绝返回。需要刷新时按 [关联与维护](library.md#关联与维护) 更新索引；值得保存的阅读成果按同文件的卡片规范处理。
 
-新资料在构建前尚不能通过索引命中，可临时用 [search_library.py](../scripts/search_library.py) 精确检索回退。开放发现时仍搜索整个适用书库，不用限制来源来节省输出；限制命中数和上下文，选中候选后再定位单书，避免倾倒长行。索引与回退工具的返回上限均不代表总命中数。现有功能是本地字词索引、人工概念词组和核验卡片，不是向量语义搜索；结果和覆盖状态不等于已分析、全库理解或后台吸收。
+标题、作者、译者及指导资料分类按当前目录和配置筛选。`read` 的 `metadata_sha256` 仅覆盖目录中的引用相关字段与路径，不包含来源记录正文，也不核验实体书。新卡在实际核对原文及来源记录后，将这个值记在对应 evidence 的 `metadata_sha256` 中；旧卡不能因执行 `build` 自动获得“已审阅”的状态。仅在 `record.md` 中保存的译者或版本信息仍需直接阅读该记录。
+
+新资料在构建前尚不能通过索引命中，可临时用 [search_library.py](../scripts/search_library.py) 精确检索回退。它会扫描全部符合 `--source` / `--title` 筛选的来源，再按来源轮换选择命中，`--limit` 只限制展示数。返回的 `total_matches` 是命中行数，`sources_scanned` 是成功扫描来源数；检查 `scan_complete` 和 `failed_sources`，不能把读取失败算作已经查过。它采用字面匹配，不做语义相关性排序，简繁仍分开匹配。
+
+回退查询例：`python scripts/search_library.py "回想" --workspace 工作区路径 --limit 4 --budget 3600`。`--budget` 限制完整 JSONL 输出字符数（含元数据、转义和换行，默认3600），`--snippet` 限制单个片段字符数。`context` 是原文片段，不再加入显示用行号；真实位置见 `line_start`、`column_start` 与 `offset_start`。片段或输出被截断时，不能据不完整语境直接引用。
+
+无需索引也可展开：`python scripts/search_library.py --workspace 工作区路径 --read --source 来源ID --offset 返回的next_offset --expect-sha256 返回的source_sha256`。要补读片段前文，可从更小的非负偏移开始。偏移以 UTF-8 正文去除 BOM、将 CRLF/CR 统一为 LF 后的 Unicode 字符计数；继续使用实际返回的 `next_offset`，不要把行号当偏移。`--expect-sha256` 会拒绝已改变的原文件，重新检索后再读。`citation_ready=false` 表示仍需核对来源记录及足够的前后文。
+
+开放发现时仍搜索整个适用书库，不用限制来源来节省输出；选中候选后再定位单书。返回上限不代表总命中数。现有功能是本地字词索引、人工概念词组和核验卡片，不是向量语义搜索；结果和覆盖状态不等于已分析、全库理解或后台吸收。
+<!-- export:gpt:local-boundaries:end -->

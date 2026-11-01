@@ -13,6 +13,8 @@ VERSION = 1
 WINDOW = 1800
 OVERLAP = 180
 CJK = re.compile(r'[\u3400-\u9fff\U00020000-\U0002fa1f]+|[^\W_]+', re.UNICODE)
+METADATA_FIELDS = ('authors', 'coverage', 'edition_notes', 'translator', 'translators',
+                   'edition', 'languages')
 
 
 def json_read(path):
@@ -36,6 +38,11 @@ def root_for(args):
         raise ValueError('Specify --workspace, run from a workspace, or configure local-workspace.json')
     binding = json_read(binding_path)
     return Path(binding['default_workspace']).expanduser().resolve()
+
+
+def retrieval_settings(root):
+    path = root / 'techniques/retrieval-config.json'
+    return json_read(path) if path.is_file() else {}
 
 
 def norm(text, mapping):
@@ -65,9 +72,9 @@ def phrase(term, mapping):
 def bounded(payload, budget):
     """Bound serialized characters, not pretend this is an exact model token count."""
     payload['output_budget_chars'] = budget
-    payload['output_truncated'] = False
+    payload['output_truncated'] = payload.get('output_truncated', False)
     encode = lambda: json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
-    while len(encode()) > budget:
+    while len(encode()) + 1 > budget:
         payload['output_truncated'] = True
         results = payload.get('results', [])
         if len(results) > 1:
@@ -125,11 +132,30 @@ def source_manifest(root):
     return json_read(safe_path(root, manifest['catalog']))['sources']
 
 
+def source_metadata(source):
+    return {key: source.get(key) for key in METADATA_FIELDS}
+
+
+def metadata_sha256(source):
+    """Fingerprint catalog citation fields, not the contents of record.md or publication truth."""
+    payload = {key: source.get(key) for key in ('id', 'title', 'text_path', 'record_path')}
+    payload.update(source_metadata(source))
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+    return hashlib.sha256(encoded.encode('utf-8')).hexdigest()
+
+
+def title_matches(source, query, mapping):
+    values = [source.get('title', ''), source['id']]
+    for key in ('authors', 'translator', 'translators'):
+        items = source.get(key) or []
+        values.extend([items] if isinstance(items, str) else items)
+    return any(norm(str(value), mapping).find(norm(query, mapping)) >= 0 for value in values)
+
+
 def build(root, args):
     started = time.perf_counter()
     sources = source_manifest(root)
-    kinds_path = root / 'techniques/retrieval-config.json'
-    settings = json_read(kinds_path) if kinds_path.exists() else {}
+    settings = retrieval_settings(root)
     db = connect(root, True)
     previous = config(db, 'version')
     if previous not in (None, VERSION):
@@ -163,7 +189,7 @@ def build(root, args):
         stat = path.stat()
         old = db.execute('SELECT * FROM sources WHERE id=?', (s['id'],)).fetchone()
         kind = 'guide' if s['id'] in guide_ids else 'literature'
-        meta = json.dumps({k: s.get(k) for k in ('authors','coverage','edition_notes')}, ensure_ascii=False)
+        meta = json.dumps(source_metadata(s), ensure_ascii=False)
         if old and not args.force and old['size'] == stat.st_size and old['mtime'] == stat.st_mtime_ns and old['path'] == s['text_path']:
             db.execute('UPDATE sources SET title=?,record_path=?,kind=?,meta=? WHERE id=?', (s['title'],s['record_path'],kind,meta,s['id']))
             skipped += 1
@@ -222,9 +248,9 @@ def search(root, args):
     groups = [g.split('|') for g in args.group]
     if args.query:
         groups.append([args.query])
-    settings = json_read(root / 'techniques/retrieval-config.json')
+    settings = retrieval_settings(root)
     for concept in args.concept:
-        if concept not in settings['concepts']:
+        if concept not in settings.get('concepts', {}):
             raise ValueError('Unknown concept; inspect retrieval-config.json concept keys')
         groups.append(settings['concepts'][concept]['terms'])
     if any(not any(phrase(t, mapping) for t in group) for group in groups):
@@ -232,25 +258,32 @@ def search(root, args):
     # A one-character CJK token is only indexed when standalone. Reject misleading partial coverage.
     if any(len(norm(t.strip(), mapping)) == 1 and '\u3400' <= norm(t.strip(),mapping) <= '\u9fff' for g in groups for t in g):
         raise ValueError('Use a phrase of at least two Chinese characters, or select a known scene card')
+    live = {s['id']: s for s in source_manifest(root)}
     clauses, values = [], []
     if args.source:
         clauses.append('s.id IN (' + ','.join('?' for _ in args.source) + ')'); values.extend(args.source)
     if args.title:
-        # Title/author discovery also folds characters; no full catalog dumped into the conversation.
-        matches = [s['id'] for s in db.execute('SELECT * FROM sources') if norm(args.title,mapping) in norm(s['title']+' '+s['meta'],mapping)]
+        # Filter current catalog values even when only bibliographic metadata changed.
+        matches = [sid for sid, source in live.items() if title_matches(source, args.title, mapping)]
         clauses.append('s.id IN (' + ','.join('?' for _ in matches) + ')'); values.extend(matches)
     if args.kind != 'all':
-        clauses.append('s.kind=?'); values.append(args.kind)
+        guide_ids = set(settings.get('guide_source_ids', []))
+        matches = [sid for sid in live if (sid in guide_ids) == (args.kind == 'guide')]
+        clauses.append('s.id IN (' + ','.join('?' for _ in matches) + ')'); values.extend(matches)
     where = (' AND ' + ' AND '.join(clauses)) if clauses else ''
-    live = {s['id']: s for s in source_manifest(root)}
     indexed = {s['id'] for s in db.execute('SELECT id FROM sources')}
     missing = sorted(set(live)-indexed)
     eligible = [s['id'] for s in db.execute('SELECT s.id FROM sources s WHERE 1=1'+where,values) if s['id'] in live]
     scope = {'mode':'selected_sources' if args.source or args.title else 'library_wide',
              'kind':args.kind,'eligible_sources':len(eligible),'source_filters':args.source,'title_filter':args.title}
     if not groups:
-        rows = db.execute('SELECT s.* FROM sources s WHERE 1=1'+where+' ORDER BY s.title LIMIT ?', values+[args.limit]).fetchall()
-        results = [{'source':s['id'],'title':s['title'],'kind':s['kind'],'path':s['path'],'fresh':fresh_source(root,s)} for s in rows if s['id'] in live]
+        rows = db.execute('SELECT s.* FROM sources s WHERE 1=1'+where, values).fetchall()
+        rows = sorted((s for s in rows if s['id'] in live), key=lambda s: live[s['id']]['title'])
+        guide_ids = set(settings.get('guide_source_ids', []))
+        results = [{'source':s['id'],'title':live[s['id']]['title'],
+                    'kind':'guide' if s['id'] in guide_ids else 'literature',
+                    'path':live[s['id']]['text_path'],
+                    'fresh':live[s['id']]['text_path'] == s['path'] and fresh_source(root,s)} for s in rows[:args.limit]]
         bounded({'mode':'titles','scope':scope,'results':results,'unindexed_count':len(missing),'note':'literature means non-guide, not a verified fiction classification'}, args.budget)
         return
     expression = ' AND '.join('('+' OR '.join(phrase(t,mapping) for t in g if phrase(t,mapping))+')' for g in groups)
@@ -273,11 +306,22 @@ def search(root, args):
             continue
         raw = row['text']; folded = norm(raw,mapping)
         positions = [folded.find(t) for t in terms if folded.find(t) >= 0]
-        offset = max(0,min(positions or [0])-60)
-        snippet = raw[offset:offset+args.snippet]
         matched = [t for t in terms if t in folded]
-        results.append({'passage':f"{sid}:{row['start']}:{row['sha256'][:12]}",'source':sid,'title':row['title'],'heading':row['heading'],
+        # Keep the original character offset even when Unicode casefold expands a character.
+        first_match = min(positions or [0])
+        original_match = 0
+        if first_match:
+            consumed = 0
+            for original_match, character in enumerate(raw):
+                width = len(norm(character, mapping))
+                if consumed + width > first_match:
+                    break
+                consumed += width
+        offset = max(0,original_match-60)
+        snippet = raw[offset:offset+args.snippet]
+        results.append({'passage':f"{sid}:{row['start']}:{row['sha256'][:12]}",'source':sid,'title':live[sid]['title'],'heading':row['heading'],
                         'lines':[row['line_start'],row['line_end']], 'matched':matched,
+                        'match_offset':row['start'] + original_match,
                         'snippet':snippet,'truncated':True,'citation_ready':False})
         counts[sid] = counts.get(sid,0)+1
         seen.setdefault(sid,[]).append((row['start'],row['end']))
@@ -286,6 +330,58 @@ def search(root, args):
     bounded({'mode':'ranked_candidates','scope':scope,'results':results,'candidate_pool':len(rows),'pool_limit':args.pool,
              'stale_sources':sorted(stale),'unindexed_count':len(missing),'method':'Chinese bigrams / word FTS + explicit concept groups; not semantic embeddings',
              'next':'read --passage ID to verify context; broaden groups if no useful match'},args.budget)
+
+
+def context_range(text, start, end, mode, focus):
+    """Expand at Markdown paragraph/section boundaries without changing index offsets."""
+    if mode == 'chars':
+        return start, end
+    headings = list(re.finditer(r'^(#{1,6})[ \t]+[^\n]+', text, re.M))
+    prior = [h for h in headings if h.start() <= focus]
+    heading = prior[-1] if prior else None
+    section_start = heading.start() if heading else 0
+    section_end = len(text)
+    for following in headings:
+        if following.start() > focus and (not heading or len(following[1]) <= len(heading[1])):
+            section_end = following.start()
+            break
+    if mode == 'section':
+        return section_start, section_end
+    start, end = max(start, section_start), min(end, section_end)
+    breaks = list(re.finditer(r'\n[ \t]*\n', text, re.M))
+    before = [b.end() for b in breaks if section_start <= b.end() <= start]
+    after = [b.end() for b in breaks if end <= b.end() <= section_end]
+    return (before[-1] if before else section_start), (after[0] if after else section_end)
+
+
+def bounded_read(payload, text, offsets, start, end, budget, focus=None):
+    """Fit complete serialized output, keeping the selected focus when context is too long."""
+    desired_start, desired_end = start, end
+    length = end - start
+    payload.update(requested_offset_start=start, requested_offset_end=end,
+                   output_budget_chars=budget, output_truncated=False)
+    while True:
+        if focus is not None and length < desired_end - desired_start:
+            start = max(desired_start, min(focus - length // 2, desired_end - length))
+        end = start + length
+        line = bisect.bisect_right(offsets, start)
+        complete = start == desired_start and end == desired_end
+        payload.update(offset_start=start, offset_end=end, line_start=line,
+                       column_start=start-offsets[line-1]+1,
+                       line_end=bisect.bisect_right(offsets, end-1),
+                       line_end_requested=bisect.bisect_right(offsets, desired_end-1),
+                       text=text[start:end], next_offset=end if end < len(text) else None,
+                       context_complete=complete, context_omitted_before=start > desired_start,
+                       context_omitted_after=end < desired_end, output_truncated=not complete)
+        encoded = json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
+        excess = len(encoded) + 1 - budget
+        if excess <= 0:
+            print(encoded)
+            return
+        if length == 1:
+            raise ValueError('Budget too small for source metadata and context; increase --budget')
+        reduced = length - max(20, excess)
+        length = reduced if reduced > 0 else max(1, length // 2)
 
 
 def read(root, args):
@@ -308,10 +404,16 @@ def read(root, args):
     live = {s['id']:s for s in source_manifest(root)}
     if sid not in live or live[sid]['text_path'] != source['path'] or not fresh_source(root,source,True):
         raise ValueError('Source changed, moved or removed; run build before quoting')
-    text = safe_path(root,source['path']).read_text('utf-8-sig')
+    text = safe_path(root,source['path']).read_text('utf-8-sig').replace('\r\n', '\n').replace('\r', '\n')
     offsets = [0] + [m.end() for m in re.finditer('\n',text)]
+    focus = args.focus_offset
+    if focus is not None and (not 0 <= focus < len(text) or
+                              passage is not None and not passage['start'] <= focus < passage['end']):
+        raise ValueError('focus-offset must be inside the selected source/passage')
     if args.offset is not None:
         start = args.offset; end = min(len(text),start+args.budget)
+    elif focus is not None:
+        start=max(0,focus-args.context_chars); end=min(len(text),focus+args.context_chars+1)
     elif passage:
         start=max(0,passage['start']-args.context_chars); end=min(len(text),passage['end']+args.context_chars)
     else:
@@ -320,14 +422,16 @@ def read(root, args):
         start=offsets[args.start-1]; end=offsets[args.end] if args.end < len(offsets) else len(text)
     if not 0 <= start < end <= len(text):
         raise ValueError('Invalid or empty range')
-    line = bisect.bisect_right(offsets,start)
-    bounded({'source':sid,'title':source['title'],'path':str(safe_path(root,source['path'])),
-             'record_path':source['record_path'],'metadata':json.loads(source['meta']),
-             'source_sha256':source['sha256'],'verified_current':True,
-             'offset_start':start,'requested_offset_end':end,'line_start':line,'column_start':start-offsets[line-1]+1,
-             'line_end_requested':bisect.bisect_right(offsets,end-1),'text':text[start:end],
-             'next_offset':end if end<len(text) else None,
-             'note':'Offsets count normalized Unicode characters. Truncation may split a paragraph; expand before interpreting.'},args.budget)
+    boundary_focus = focus if focus is not None else passage['start'] if passage else start
+    start, end = context_range(text, start, end, args.context_mode, boundary_focus)
+    current = live[sid]
+    payload = {'source':sid,'title':current['title'],'path':str(safe_path(root,source['path'])),
+             'record_path':current['record_path'],'metadata':source_metadata(current),
+             'metadata_origin':'current_catalog','metadata_sha256':metadata_sha256(current),
+             'source_sha256':source['sha256'],'verified_current':True,'text_verified':True,
+             'context_mode':args.context_mode,'focus_offset':focus,
+             'note':'Text hash verified; catalog metadata is not publication verification. Offsets count normalized Unicode characters. Read the source record and omitted context before citing.'}
+    bounded_read(payload, text, offsets, start, end, args.budget, focus)
 
 
 def notes(root,args):
@@ -342,15 +446,25 @@ def notes(root,args):
         if args.id and card['id']!=args.id: continue
         score=len(query_terms & set(tokens(card['title']+' '+' '.join(card['tags'])+' '+card['summary'],mapping)))
         if args.query and not score: continue
-        valid=True
+        text_verified=bool(card['evidence'])
+        metadata_states=[]
         for evidence in card['evidence']:
             source=db.execute('SELECT * FROM sources WHERE id=?',(evidence['source'],)).fetchone()
             if not source or evidence['source'] not in live or live[evidence['source']]['text_path']!=source['path'] or not fresh_source(root,source,True) or evidence['sha256']!=source['sha256']:
-                valid=False
-        row={'id':card['id'],'title':card['title'],'summary':card['summary'],'kind':card['kind'],'valid':valid,'path':card['path']}
+                text_verified=False
+            snapshot=evidence.get('metadata_sha256')
+            metadata_states.append('not_recorded' if not snapshot else
+                                   'match' if evidence['source'] in live and snapshot == metadata_sha256(live[evidence['source']]) else 'changed')
+        metadata_status=('changed' if 'changed' in metadata_states else
+                         'not_recorded' if not metadata_states or 'not_recorded' in metadata_states else 'match')
+        valid=text_verified and metadata_status != 'changed'
+        row={'id':card['id'],'title':card['title'],'summary':card['summary'],'kind':card['kind'],'valid':valid,'path':card['path'],
+             'text_verified':text_verified,'metadata_status':metadata_status,
+             'validation_scope':'text_only' if metadata_status == 'not_recorded' else 'text_and_catalog',
+             'metadata_recheck_required':metadata_status != 'match','citation_ready':False}
         if args.id:
             row['evidence']=card['evidence']
-            row['content']=safe_path(root,card['path']).read_text('utf-8') if valid else 'Evidence changed; revisit source before reusing this card.'
+            row['content']=safe_path(root,card['path']).read_text('utf-8') if valid else 'Text or catalog evidence changed; revisit the source before reusing this card.'
         matches.append((score,row))
     matches.sort(key=lambda x:-x[0])
     bounded({'mode':'reading_cards','results':[row for _,row in matches[:args.limit]],
@@ -358,7 +472,7 @@ def notes(root,args):
 
 
 def main():
-    if hasattr(sys.stdout,'reconfigure'): sys.stdout.reconfigure(encoding='utf-8')
+    if hasattr(sys.stdout,'reconfigure'): sys.stdout.reconfigure(encoding='utf-8', newline='\n')
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--workspace',type=Path)
     commands=parser.add_subparsers(dest='command',required=True)
@@ -376,6 +490,8 @@ def main():
         elif name=='read':
             p.add_argument('--passage');p.add_argument('--source');p.add_argument('--start',type=int);p.add_argument('--end',type=int)
             p.add_argument('--offset',type=int);p.add_argument('--context-chars',type=int,default=240)
+            p.add_argument('--context-mode',choices=['chars','paragraph','section'],default='chars')
+            p.add_argument('--focus-offset',type=int)
         else:
             p.add_argument('query',nargs='?',default='');p.add_argument('--id')
             p.add_argument('--kind',choices=['all','guide','fiction','literature'],default='all');p.add_argument('--limit',type=int,default=4)
@@ -383,6 +499,10 @@ def main():
     if args.budget < 1600 or args.budget > 30000: parser.error('budget must be 1600..30000 characters')
     for key in ['limit','pool','per_source','snippet']:
         if hasattr(args,key) and getattr(args,key)<1: parser.error(key+' must be positive')
+    if args.command == 'read':
+        if args.context_chars < 0: parser.error('context-chars must be nonnegative')
+        if args.offset is not None and (args.focus_offset is not None or args.context_mode != 'chars'):
+            parser.error('offset continuation requires chars mode and no focus-offset')
     try:
         globals()[args.command](root_for(args),args)
     except (ValueError,OSError,sqlite3.Error,KeyError) as exc:

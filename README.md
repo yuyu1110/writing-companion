@@ -48,8 +48,11 @@ skills/writing-companion/
   SKILL.md                    核心规则与按需导航
   agents/openai.yaml          展示名称与默认提示
   references/                六个主题的工作规则
-  scripts/                   本地检索与原文定位
+  scripts/                   本地检索、原文定位与作品版本
   assets/workspace-template/ 空白资料和进度结构
+  assets/record-templates/   素材、长篇状态、反馈与接续表单
+gpt/                        由共享规则生成的完整对话 Markdown
+maintenance/                共同来源导出与同步检查
 docs/
   getting-started.md          安装、调用与检索演示
   design.md                  系统结构与行为边界
@@ -71,6 +74,9 @@ Skill 的教学与协作方式由宿主模型执行，需要在真实写作中�
 - [构建过程](docs/building-process.md)：需求、取舍、迭代和参考项目。
 - [书库格式](docs/library-format.md)：怎样接入自己的资料。
 - [验证与限制](docs/validation.md)：哪些可以自动检查，哪些需要人工判断。
+- [共同来源与维护](docs/maintenance.md)：怎样同步 Skill、GPT 与空白模板。
 - [变更记录](CHANGELOG.md)：发布包与本地系统的关系。
+
+需要直接在 GPT 对话使用时，可上传[完整 Markdown](gpt/写作伴侣-GPT对话完整版.md)，再发送：“请读取这份协议，按其中规则辅助我的当前写作，不要仅总结文件。”书库和作品仍需另行提供；文件内有使用说明与接续模板。
 
 本项目由作者提出目标与协作约束，在与 AI 的多轮协作中逐步形成。它是独立项目，不代表 OpenAI 或参考项目的官方产品。当前未附加开源许可证；公开可见不等于已经授予任意再分发或商业使用许可。

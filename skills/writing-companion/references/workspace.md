@@ -1,10 +1,14 @@
 # 工作区与记录
 
+<!-- export:gpt:workspace-intro:start -->
 用于作品归档、版本保存及作者档案与进度记录。工作区选择顺序见 [Skill 入口](../SKILL.md#接续作者与资料)；来源和阅读卡的业务规则见 [资料与阅读卡管理](library.md)。
+<!-- export:gpt:workspace-intro:end -->
 
 ## 定位与读取
 
+<!-- export:gpt:workspace-location:start -->
 选定工作区后，`workspace.json` 内路径均相对于其所在目录。恢复记录时只读与当前任务有关的条目；文件不存在就说明缺失，不创建新目录冒充旧进度。
+<!-- export:gpt:workspace-location:end -->
 
 `catalog.json` 包含 `schema_version` 及四组数组：`sources`、`works`、`techniques`、`practice`。每个条目包含唯一 `id`、可识别的 `title`、相对于工作区的 `record_path`。作品可额外记录 `status`。目录只作导航，详细事实以记录和原文为准。
 
@@ -17,6 +21,7 @@
 - 使用稳定且不重复的条目 ID；重名作品不要直接合并。必要时比较原文或询问作品身份。
 - 对作品修改建立新版本，记录作者/助手/混合来源及采纳状态；原稿留存。活动版本、候选版本与作者确认定稿分别记录。
 - 用户明确说“采用这一版”“替换”“定稿”时执行并记录决定；“看看这样行不行”不等于采纳。撤回决定时保留历史并更新活动状态。
+- 撤回采纳不删除曾采纳的版本；记录退回的目标版本、理由和当前活动版本。候选设定、曾经采纳与当前采用分别判断，避免恢复时把旧决定重新生效。
 - 改写失败或目录更新失败时报告实际已完成部分，不声称整体成功；保留可恢复数据，不清理原稿。
 - 系统不因整理资料而自动上传、发表、投稿或向他人发送。使用已有授权的本地路径和工具完成操作。
 
@@ -33,7 +38,9 @@
 | 风格参照 | 样本及版本、表达原则、原文短例与定位、适用范围、样本观察/作者确认/希望调整的状态 |
 | 练习记录 | ID、目标、题目、作者作答、反馈依据、是否经提示、后续独立运用证据 |
 
+<!-- export:gpt:workspace-layout:start -->
 建议新记录放在 `library/{id}/record.md`、`works/{id}/record.md`、`techniques/{id}.md`、`practice/{id}/record.md`。首次确需保存时再创建目录。原文与不同版本在相应条目目录下存放，保留扩展名和来源说明。
+<!-- export:gpt:workspace-layout:end -->
 
 风格参照按 [个人风格](voice.md) 保存并由作者档案或作品卡导航。既有 JSON 目录格式保持兼容。
 
@@ -46,3 +53,25 @@
 会话摘要只保存恢复任务所需的事实：当前阶段、活动作品、已经完成的工作、用户已决定的事项、未决事项、下一步。保存的是已发生的进展；提议不写成用户已批准。避免逐字保存无关私人聊天。
 
 新会话先用摘要定位，关键事实回到原文核验。若摘要与新指令矛盾，按新指令执行并更新过时状态。没有读取或没有写入成功，就不宣称“我记得”“已归档”或“已永久记住”。
+
+## 素材与长篇状态
+
+作者要求收集、归档或整理素材时，可按[素材卡](../assets/record-templates/material-card.md)记录一次具体观察：动作、声音、物件、发生条件、当时感受与后来理解。已发生事实、记忆不确定处、联想和虚构候选分开；普通闲谈不自动进入长期素材库。新建素材可导航到 `catalog.techniques`，标 `kind=material`，详细内容仍在记录里；它不是文学来源，不能混入 `sources` 冒充名家原文。
+
+长篇或复杂小说按[小说状态表](../assets/record-templates/novel-state.md)维护必要信息：有证据的位置、时间线、各人物此时知道与不知道的事、已建立却未兑现的线索，以及尚未采用的构思。读到哪一版就记录哪一版，未知结局不自行补齐；候选情节在作者采纳前不进入已确认事实。只加载本次续写涉及的部分，不每轮展示整张表。
+
+作品记录、个人声音选择和反馈迁移分别可用[作品卡](../assets/record-templates/work-record.md)、[声音选择记录](../assets/record-templates/voice-decisions.md)、[反馈过程记录](../assets/record-templates/feedback-record.md)。这些是需要保存时的辅助表单，不是启动写作前必须填写的问卷。
+
+## 可选的版本工具
+
+<!-- export:gpt:work-manager-intro:start -->
+需要稳定保存新作品及版本时，可使用 [work_manager.py](../scripts/work_manager.py)。无 Python 时仍可按上述规则使用普通文件工具，不把脚本作为辅导的前提。旧的自由格式作品记录无需自动迁移。
+<!-- export:gpt:work-manager-intro:end -->
+
+<!-- export:gpt:work-manager:start -->
+始终明确 `--workspace`。`archive --id ID --title 题名 --text-file 原稿.md` 保存新条目；`candidate --id ID --origin assistant --text-file 候选.md` 只暂存，活动版本不变。`show --id ID` 核对活动版本、正文哈希及 `state_sha256`；作者明确决定后才调用 `adopt --id ID --version v001 [--final]`，撤回可用 `revert --id ID --version original`，两者都保留各版正文。写入时可传 `--expect-state` 防止将过期决定套到新状态；`handoff --id ID` 只读输出恢复信息，继续辅导前仍读活动正文。
+
+脚本只支持默认 `catalog.json` 的新条目，生成 `record.json` 与可读 `record.md`。每个文件原子写入，跨文件保存并非数据库事务：中断时保留 `pending-save.json` 并阻止下一次写入；先核对已落盘文件再恢复，不删原稿。成功输出中的 `session_updated=false` 表示会话摘要仍需按本次实际进展另行更新，不能误报已完成跨对话接续。
+<!-- export:gpt:work-manager:end -->
+
+没有文件工具时，按[接续包](../assets/record-templates/handoff.md)输出可复制的版本、决定与待办，并说明没有写入外部存储；不要仅因用户说“保存”就声称已经持久化。

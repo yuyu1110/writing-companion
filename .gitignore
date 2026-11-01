@@ -1,4 +1,6 @@
 # Personal workspaces and machine bindings
+/dist/
+/work/
 /private-workspace/
 local-workspace.json
 .env
